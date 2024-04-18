@@ -31,13 +31,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <cstring>
 #include "Adafruit_GFX.h"
 #include "glcdfont.c"
-#ifdef __AVR__
-#include <avr/pgmspace.h>
-#elif defined(ESP8266) || defined(ESP32)
-#include <pgmspace.h>
-#endif
 
 // Many (but maybe not all) non-AVR board installs define macros
 // for compatibility with existing PROGMEM-reading AVR code.
@@ -63,27 +59,11 @@ POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 inline GFXglyph *pgm_read_glyph_ptr(const GFXfont *gfxFont, uint8_t c) {
-#ifdef __AVR__
-  return &(((GFXglyph *)pgm_read_pointer(&gfxFont->glyph))[c]);
-#else
-  // expression in __AVR__ section may generate "dereferencing type-punned
-  // pointer will break strict-aliasing rules" warning In fact, on other
-  // platforms (such as STM32) there is no need to do this pointer magic as
-  // program memory may be read in a usual way So expression may be simplified
-  return gfxFont->glyph + c;
-#endif //__AVR__
+    return gfxFont->glyph + c;
 }
 
 inline uint8_t *pgm_read_bitmap_ptr(const GFXfont *gfxFont) {
-#ifdef __AVR__
-  return (uint8_t *)pgm_read_pointer(&gfxFont->bitmap);
-#else
-  // expression in __AVR__ section generates "dereferencing type-punned pointer
-  // will break strict-aliasing rules" warning In fact, on other platforms (such
-  // as STM32) there is no need to do this pointer magic as program memory may
-  // be read in a usual way So expression may be simplified
-  return gfxFont->bitmap;
-#endif //__AVR__
+    return gfxFont->bitmap;
 }
 
 #ifndef min
@@ -356,9 +336,6 @@ void Adafruit_GFX::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1,
 /**************************************************************************/
 void Adafruit_GFX::drawCircle(int16_t x0, int16_t y0, int16_t r,
                               uint16_t color) {
-#if defined(ESP8266)
-  yield();
-#endif
   int16_t f = 1 - r;
   int16_t ddF_x = 1;
   int16_t ddF_y = -2 * r;
@@ -1239,7 +1216,7 @@ void Adafruit_GFX::drawChar(int16_t x, int16_t y, unsigned char c,
     @param  c  The 8-bit ascii character to write
 */
 /**************************************************************************/
-size_t Adafruit_GFX::write(uint8_t c) {
+void Adafruit_GFX::write(uint8_t c) {
   if (!gfxFont) { // 'Classic' built-in font
 
     if (c == '\n') {              // Newline?
@@ -1282,7 +1259,20 @@ size_t Adafruit_GFX::write(uint8_t c) {
       }
     }
   }
-  return 1;
+}
+
+void Adafruit_GFX::print(char * txt) {
+    while (*txt != 0) {
+        write(*txt);
+        txt ++;
+    }
+}
+
+void Adafruit_GFX::print(const char * txt) {
+  while (*txt != 0) {
+    write(*txt);
+    txt ++;
+  }
 }
 
 /**************************************************************************/
@@ -1486,48 +1476,11 @@ void Adafruit_GFX::getTextBounds(const char *str, int16_t x, int16_t y,
     @param    h      The boundary height, set by function
 */
 /**************************************************************************/
-void Adafruit_GFX::getTextBounds(const String &str, int16_t x, int16_t y,
+void Adafruit_GFX::getTextBounds(const std::string &str, int16_t x, int16_t y,
                                  int16_t *x1, int16_t *y1, uint16_t *w,
                                  uint16_t *h) {
   if (str.length() != 0) {
     getTextBounds(const_cast<char *>(str.c_str()), x, y, x1, y1, w, h);
-  }
-}
-
-/**************************************************************************/
-/*!
-    @brief    Helper to determine size of a PROGMEM string with current
-   font/size. Pass string and a cursor position, returns UL corner and W,H.
-    @param    str     The flash-memory ascii string to measure
-    @param    x       The current cursor X
-    @param    y       The current cursor Y
-    @param    x1      The boundary X coordinate, set by function
-    @param    y1      The boundary Y coordinate, set by function
-    @param    w      The boundary width, set by function
-    @param    h      The boundary height, set by function
-*/
-/**************************************************************************/
-void Adafruit_GFX::getTextBounds(const __FlashStringHelper *str, int16_t x,
-                                 int16_t y, int16_t *x1, int16_t *y1,
-                                 uint16_t *w, uint16_t *h) {
-  uint8_t *s = (uint8_t *)str, c;
-
-  *x1 = x;
-  *y1 = y;
-  *w = *h = 0;
-
-  int16_t minx = _width, miny = _height, maxx = -1, maxy = -1;
-
-  while ((c = pgm_read_byte(s++)))
-    charBounds(c, &x, &y, &minx, &miny, &maxx, &maxy);
-
-  if (maxx >= minx) {
-    *x1 = minx;
-    *w = maxx - minx + 1;
-  }
-  if (maxy >= miny) {
-    *y1 = miny;
-    *h = maxy - miny + 1;
   }
 }
 
@@ -1693,7 +1646,6 @@ void Adafruit_GFX_Button::drawButton(bool inverted) {
                   _y1 + (_h / 2) - (4 * _textsize_y));
   _gfx->setTextColor(text);
   _gfx->setTextSize(_textsize_x, _textsize_y);
-  _gfx->print(_label);
 }
 
 /**************************************************************************/
@@ -1765,6 +1717,8 @@ GFXcanvas1::GFXcanvas1(uint16_t w, uint16_t h) : Adafruit_GFX(w, h) {
   if ((buffer = (uint8_t *)malloc(bytes))) {
     memset(buffer, 0, bytes);
   }
+
+  for (int i = 0; i < 18; i ++) leds[i] = 0;
 }
 
 /**************************************************************************/
